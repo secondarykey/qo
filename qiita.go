@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/sclevine/agouti"
@@ -40,7 +41,7 @@ func getItems(id string) ([]*Item, error) {
 		wkItems, err := getUserItem(url)
 		if err != nil {
 			if errors.Is(err, NoLongerError) {
-				log.Println("No Longer")
+				log.Println("記事の一覧を抽出しました。")
 				break
 			}
 			return nil, xerrors.Errorf("get user item error: %w", err)
@@ -134,11 +135,15 @@ func getHTML(url string) (io.Reader, error) {
 
 func generateItems(id string, items []*Item) error {
 
+	log.Println(fmt.Sprintf("記事のダウンロードを開始します(%d秒)", *dur))
+
 	for _, item := range items {
 		err := generateItem(id, item)
 		if err != nil {
 			return xerrors.Errorf("generate item: %w", err)
 		}
+
+		time.Sleep(time.Duration(*dur) * time.Second)
 	}
 	return nil
 }
@@ -164,11 +169,12 @@ func generateItem(id string, item *Item) error {
 		return xerrors.Errorf("create item file: %w", err)
 	}
 	defer f.Close()
-
 	_, err = io.Copy(f, resp.Body)
 	if err != nil {
 		return xerrors.Errorf("response copy : %w", err)
 	}
+
+	log.Println(fmt.Sprintf("    -> %s", name))
 
 	return nil
 }

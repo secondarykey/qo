@@ -8,6 +8,12 @@ import (
 	"golang.org/x/xerrors"
 )
 
+var dur *int
+
+func init() {
+	dur = flag.Int("r", 2, "request duration")
+}
+
 func Usage() {
 
 }
@@ -30,6 +36,14 @@ func Run() error {
 	args := flag.Args()
 	if len(args) < 1 {
 		return fmt.Errorf("引数にユーザIDが必要です")
+	}
+
+	if *dur <= 0 {
+		return fmt.Errorf("リクエスト区間が短いです")
+	}
+
+	if *dur > 30 {
+		return fmt.Errorf("リクエスト区間が長すぎやしませんか？")
 	}
 
 	user := args[0]

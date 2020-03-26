@@ -32,5 +32,8 @@ func generateCSV(id string, items []*Item) error {
 	}
 
 	writer.Flush()
+
+	log.Println(fmt.Sprintf("%s に一覧を出力しました", name))
+
 	return nil
 }
