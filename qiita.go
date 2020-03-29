@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -197,8 +196,10 @@ func generateItem(id string, item *Item) error {
 	}
 	defer resp.Body.Close()
 
-	idSlc := strings.Split(item.URL, "/")
-	itemId := idSlc[3]
+	itemId := item.ID()
+	if itemId == "" {
+		return xerrors.Errorf("item id error[%s]: %w", item.URL, err)
+	}
 
 	name := filepath.Join(id, itemId) + ".md"
 

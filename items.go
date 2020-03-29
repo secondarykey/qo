@@ -1,6 +1,8 @@
 package main
 
-import ()
+import (
+	"strings"
+)
 
 type Item struct {
 	Date string
@@ -18,6 +20,14 @@ func NewItem() *Item {
 func (i *Item) AddTag(tag string) {
 	i.Tags = append(i.Tags, tag)
 	return
+}
+
+func (i *Item) ID() string {
+	idSlc := strings.Split(i.URL, "/")
+	if len(idSlc) <= 3 {
+		return ""
+	}
+	return idSlc[3]
 }
 
 func (i *Item) Slice() []string {
