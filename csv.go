@@ -12,8 +12,6 @@ import (
 
 func generateCSV(id string, items []*Item) error {
 
-	log.Println(fmt.Sprintf("記事数:%d", len(items)))
-
 	name := filepath.Join(id, id) + ".csv"
 
 	f, err := os.Create(name)

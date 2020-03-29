@@ -9,16 +9,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/sclevine/agouti"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 )
 
 const (
 	QiitaDomain     = "https://qiita.com"
+	QiitaItemNum    = "p.UserCounterList__UserCounterItemCount-sc-1xyqx6o-2"
 	QiitaItemClass  = "div.AllArticleList__Item-mhtjc8-2"
 	QiitaTitleClass = "a.AllArticleList__ItemBodyTitle-mhtjc8-6"
 	QiitaTagClass   = "a.AllArticleList__TagListTag-mhtjc8-4"
@@ -27,29 +29,77 @@ const (
 
 var NoLongerError = fmt.Errorf("no longer")
 
-func getItems(id string) ([]*Item, error) {
+func getItemNum(id string) (int, error) {
 
-	page := 1
-	items := make([]*Item, 0, 100)
+	log.Println("記事数の取得を行います")
+	num := -1
+	url := QiitaDomain + "/" + id
+
+	doc, err := goquery.NewDocument(url)
+	if err != nil {
+		return num, xerrors.Errorf("記事数の取得に失敗しました(%s): %w", url, err)
+	}
+
+	numSels := doc.Find(QiitaItemNum)
+
+	if numSels.Length() <= 0 {
+		return num, xerrors.Errorf("記事数の要素の取得に失敗しました(%s)", url)
+	}
+
+	numSel := numSels.First()
+	numBuf := numSel.Text()
+
+	num, err = strconv.Atoi(numBuf)
+	if err != nil {
+		return num, xerrors.Errorf("記事数の要素に問題があります(%s): %w", numBuf, err)
+	}
+
+	log.Println(fmt.Sprintf("記事数:%d", num))
+
+	return num, nil
+}
+
+func getItems(id string, num int) ([]*Item, error) {
+
 	base := QiitaDomain + "/" + id
-	url := base
+	itemPool := make(chan *Item, 100)
+	eg := errgroup.Group{}
+	page := 0
 
 	for {
 
-		log.Println("Access:" + url)
-
-		wkItems, err := getUserItem(url)
-		if err != nil {
-			if errors.Is(err, NoLongerError) {
-				log.Println("記事の一覧を抽出しました。")
-				break
-			}
-			return nil, xerrors.Errorf("get user item error: %w", err)
-		}
-
-		items = append(items, wkItems...)
 		page++
-		url = fmt.Sprintf(base+"?page=%d", page)
+		url := fmt.Sprintf(base+"?page=%d", page)
+
+		eg.Go(func() error {
+			log.Println("Access:" + url)
+
+			wkItems, err := getUserItem(url)
+			if err != nil {
+				if errors.Is(err, NoLongerError) {
+					return nil
+				}
+				return xerrors.Errorf("")
+			}
+			for _, item := range wkItems {
+				itemPool <- item
+			}
+			return nil
+		})
+
+		//ページ数で５をかけて終了
+		if (page * 5) >= num {
+			break
+		}
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	close(itemPool)
+	items := make([]*Item, 0, num)
+	for item := range itemPool {
+		items = append(items, item)
 	}
 
 	return items, nil
@@ -135,16 +185,28 @@ func getHTML(url string) (io.Reader, error) {
 
 func generateItems(id string, items []*Item) error {
 
-	log.Println(fmt.Sprintf("記事のダウンロードを開始します(%d秒)", *dur))
+	log.Println(fmt.Sprintf("記事のダウンロードを開始します"))
+
+	eg := errgroup.Group{}
 
 	for _, item := range items {
-		err := generateItem(id, item)
-		if err != nil {
-			return xerrors.Errorf("generate item: %w", err)
-		}
 
-		time.Sleep(time.Duration(*dur) * time.Second)
+		wkItem := item
+
+		eg.Go(func() error {
+			err := generateItem(id, wkItem)
+			if err != nil {
+				return xerrors.Errorf("generate item: %w", err)
+			}
+			return nil
+		})
+
 	}
+
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
