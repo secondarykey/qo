@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/sclevine/agouti"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 )
 
@@ -62,44 +62,31 @@ func getItemNum(id string) (int, error) {
 func getItems(id string, num int) ([]*Item, error) {
 
 	base := QiitaDomain + "/" + id
-	itemPool := make(chan *Item, 100)
-	eg := errgroup.Group{}
 	page := 0
+
+	items := make([]*Item, 0, num)
 
 	for {
 
 		page++
 		url := fmt.Sprintf(base+"?page=%d", page)
 
-		eg.Go(func() error {
-			log.Println("Access:" + url)
+		log.Println("Access:" + url)
 
-			wkItems, err := getUserItem(url)
-			if err != nil {
-				if errors.Is(err, NoLongerError) {
-					return nil
-				}
-				return xerrors.Errorf("")
+		wkItems, err := getUserItem(url)
+		if err != nil {
+			if errors.Is(err, NoLongerError) {
+				break
 			}
-			for _, item := range wkItems {
-				itemPool <- item
-			}
-			return nil
-		})
+			return nil, xerrors.Errorf("一覧の取得に失敗(%s):%w", url, err)
+		}
+
+		items = append(items, wkItems...)
 
 		//ページ数で５をかけて終了
 		if (page * 5) >= num {
 			break
 		}
-	}
-
-	if err := eg.Wait(); err != nil {
-		return nil, err
-	}
-	close(itemPool)
-	items := make([]*Item, 0, num)
-	for item := range itemPool {
-		items = append(items, item)
 	}
 
 	return items, nil
@@ -187,24 +174,13 @@ func generateItems(id string, items []*Item) error {
 
 	log.Println(fmt.Sprintf("記事のダウンロードを開始します"))
 
-	eg := errgroup.Group{}
-
 	for _, item := range items {
+		err := generateItem(id, item)
+		if err != nil {
+			return xerrors.Errorf("generate item: %w", err)
+		}
 
-		wkItem := item
-
-		eg.Go(func() error {
-			err := generateItem(id, wkItem)
-			if err != nil {
-				return xerrors.Errorf("generate item: %w", err)
-			}
-			return nil
-		})
-
-	}
-
-	if err := eg.Wait(); err != nil {
-		return err
+		time.Sleep(time.Duration(*dur) * time.Second)
 	}
 
 	return nil
