@@ -1,77 +1,43 @@
-package main
+package qo
 
 import (
-	"flag"
 	"fmt"
-	"log"
 	"os"
 
 	"golang.org/x/xerrors"
 )
 
-var dur *int
+func Run(id string, options ...func(*Option)) error {
 
-func init() {
-	dur = flag.Int("r", 2, "request duration")
-}
-
-func Usage() {
-}
-
-func main() {
-
-	err := Run()
-	if err != nil {
-		fmt.Printf("Error: %+v\n", err)
-		os.Exit(1)
+	op := NewOption(id)
+	for _, option := range options {
+		option(op)
 	}
 
-	log.Println("Success")
-}
-
-func Run() error {
-
-	//ユーザID取得
-	flag.Parse()
-	args := flag.Args()
-	if len(args) < 1 {
-		return fmt.Errorf("引数にユーザIDが必要です")
-	}
-
-	if *dur <= 0 {
-		return fmt.Errorf("リクエスト区間が短いです")
-	}
-
-	if *dur > 30 {
-		return fmt.Errorf("リクエスト区間が長すぎやしませんか？")
-	}
-
-	user := args[0]
-
-	err := createDirectory(user)
+	err := createDirectory(op)
 	if err != nil {
 		return xerrors.Errorf("ディレクトリが作成できませんでした: %w", err)
 	}
 
-	num, err := getItemNum(user)
+	num, err := getItemNum(op.id)
 	if err != nil {
 		return xerrors.Errorf("記事数が取れませんでした: %w", err)
 	}
 
 	//記事一覧を取得
-	items, err := getItems(user, num)
+	items, err := getItems(op.id, num)
 	if err != nil {
 		return xerrors.Errorf("記事の一覧が作成できませんでした: %w", err)
 	}
 
 	//CSVを作成
-	err = generateCSV(user, items)
+	err = generateCSV(op, items)
 	if err != nil {
 		return xerrors.Errorf("一覧CSVの作成に失敗しました: %w", err)
 	}
 
 	//記事の一覧をダウンロード
-	err = generateItems(user, items)
+	err = generateItems(op, items)
 	if err != nil {
 		return xerrors.Errorf("記事データの作成に失敗しました: %w", err)
 	}
@@ -79,15 +45,22 @@ func Run() error {
 	return nil
 }
 
-func createDirectory(dir string) error {
+func createDirectory(op *Option) error {
+
+	dir := op.GetPath()
+
 	if _, err := os.Stat(dir); err == nil {
-		err = os.RemoveAll(dir)
-		if err != nil {
-			return xerrors.Errorf("ディレクトリの削除に失敗しました: %w", err)
+		if op.ExistAndRemove {
+			err = os.RemoveAll(dir)
+			if err != nil {
+				return xerrors.Errorf("ディレクトリの削除に失敗しました: %w", err)
+			}
+		} else {
+			return fmt.Errorf("ディレクトリが存在します(%s)", dir)
 		}
 	}
 	//ディレクトリ作成
-	err := os.Mkdir(dir, 0777)
+	err := os.MkdirAll(dir, 0777)
 	if err != nil {
 		return xerrors.Errorf("ディレクトリの作成に失敗しました: %w", err)
 	}

@@ -1,4 +1,4 @@
-package main
+package qo
 
 import (
 	"encoding/csv"
@@ -10,9 +10,12 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func generateCSV(id string, items []*Item) error {
+func generateCSV(op *Option, items []*Item) error {
 
-	name := filepath.Join(id, id) + ".csv"
+	id := op.id
+
+	path := op.GetPath()
+	name := filepath.Join(path, id) + ".csv"
 
 	f, err := os.Create(name)
 	if err != nil {

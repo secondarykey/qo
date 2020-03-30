@@ -1,4 +1,4 @@
-package main
+package qo
 
 import (
 	"bytes"
@@ -169,23 +169,23 @@ func getHTML(url string) (io.Reader, error) {
 	return reader, nil
 }
 
-func generateItems(id string, items []*Item) error {
+func generateItems(op *Option, items []*Item) error {
 
 	log.Println(fmt.Sprintf("記事のダウンロードを開始します"))
 
 	for _, item := range items {
-		err := generateItem(id, item)
+		err := generateItem(op, item)
 		if err != nil {
 			return xerrors.Errorf("generate item: %w", err)
 		}
 
-		time.Sleep(time.Duration(*dur) * time.Second)
+		time.Sleep(time.Duration(op.Duration) * time.Second)
 	}
 
 	return nil
 }
 
-func generateItem(id string, item *Item) error {
+func generateItem(op *Option, item *Item) error {
 
 	url := QiitaDomain + item.URL + ".md"
 
@@ -201,7 +201,8 @@ func generateItem(id string, item *Item) error {
 		return xerrors.Errorf("item id error[%s]: %w", item.URL, err)
 	}
 
-	name := filepath.Join(id, itemId) + ".md"
+	path := op.GetPath()
+	name := filepath.Join(path, itemId) + ".md"
 
 	f, err := os.Create(name)
 	if err != nil {

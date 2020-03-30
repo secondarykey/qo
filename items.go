@@ -1,4 +1,4 @@
-package main
+package qo
 
 import (
 	"strings"
